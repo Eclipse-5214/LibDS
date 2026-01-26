@@ -215,10 +215,19 @@ void DS_JoysticksReset(void)
    register_event();
 }
 
+/*
+ * WPILib HAL joystick limits
+ */
+#define WPILIB_MAX_AXES    12
+#define WPILIB_MAX_BUTTONS 32
+#define WPILIB_MAX_POVS    12
+
 /**
  * Registers a new joystick with the given number of \a axes, \a hats and
  * \a buttons. All joystick values are set to a neutral state to ensure
  * safe operation of the robot.
+ *
+ * Values are clamped to WPILib limits to prevent protocol errors.
  */
 void DS_JoysticksAdd(const int axes, const int hats, const int buttons)
 {
@@ -229,13 +238,18 @@ void DS_JoysticksAdd(const int axes, const int hats, const int buttons)
       return;
    }
 
+   /* Clamp to WPILib limits */
+   int clamped_axes = (axes > WPILIB_MAX_AXES) ? WPILIB_MAX_AXES : axes;
+   int clamped_hats = (hats > WPILIB_MAX_POVS) ? WPILIB_MAX_POVS : hats;
+   int clamped_buttons = (buttons > WPILIB_MAX_BUTTONS) ? WPILIB_MAX_BUTTONS : buttons;
+
    /* Allocate memory for a new joystick */
    DS_Joystick *joystick = (DS_Joystick *)calloc(1, sizeof(DS_Joystick));
 
-   /* Set joystick properties */
-   joystick->num_axes = axes;
-   joystick->num_hats = hats;
-   joystick->num_buttons = buttons;
+   /* Set joystick properties (clamped to WPILib limits) */
+   joystick->num_axes = clamped_axes;
+   joystick->num_hats = clamped_hats;
+   joystick->num_buttons = clamped_buttons;
 
    /* Set joystick value arrays */
    joystick->hats = calloc(hats, sizeof(int));
