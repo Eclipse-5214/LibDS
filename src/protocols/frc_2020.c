@@ -280,18 +280,32 @@ static uint8_t get_station_code(void)
 }
 
 /**
- * Returns the size of the given \a joystick. This function is used to generate
- * joystick data (which is sent to the robot) and to resize the client->robot
- * datagram automatically.
+ * Returns the number of bytes needed to encode the button bitmask.
+ * WPILib expects (numButtons + 7) / 8 bytes.
+ */
+static int get_button_bytes(const int num_buttons)
+{
+   if (num_buttons <= 0)
+      return 0;
+   return (num_buttons + 7) / 8;
+}
+
+/**
+ * Returns the size of the given \a joystick data block (NOT including the
+ * length byte itself). This function is used to generate joystick data
+ * (which is sent to the robot) and to resize the client->robot datagram.
+ *
+ * Format: [tag][axes_count][axes...][button_count][button_bytes...][pov_count][povs...]
  */
 static uint8_t get_joystick_size(const int joystick)
 {
-   int header_size = 2;
-   int button_data = DS_GetJoystickNumButtons(joystick) + 1;
-   int axis_data = DS_GetJoystickNumAxes(joystick) + 1;
-   int hat_data = (DS_GetJoystickNumHats(joystick) * 2) + 1;
+   int tag_size = 1;  /* Tag byte (0x0c) - included in length */
+   int num_buttons = DS_GetJoystickNumButtons(joystick);
+   int button_data = 1 + get_button_bytes(num_buttons);  /* count + bitmask bytes */
+   int axis_data = 1 + DS_GetJoystickNumAxes(joystick);  /* count + axis bytes */
+   int hat_data = 1 + (DS_GetJoystickNumHats(joystick) * 2);  /* count + 2 bytes per hat */
 
-   return header_size + button_data + axis_data + hat_data;
+   return tag_size + axis_data + button_data + hat_data;
 }
 
 /**
@@ -383,16 +397,20 @@ static DS_String get_joystick_data(void)
       for (j = 0; j < DS_GetJoystickNumAxes(i); ++j)
          DS_StrAppend(&data, DS_FloatToByte(DS_GetJoystickAxis(i, j), 1));
 
-      /* Generate button data */
-      uint16_t button_flags = 0;
-      for (j = 0; j < DS_GetJoystickNumButtons(i); ++j)
-         button_flags += DS_GetJoystickButton(i, j) ? (int)pow(2, j) : 0;
+      /* Generate button bitmask (supports up to 32 buttons) */
+      int num_buttons = DS_GetJoystickNumButtons(i);
+      uint32_t button_flags = 0;
+      for (j = 0; j < num_buttons; ++j)
+         if (DS_GetJoystickButton(i, j))
+            button_flags |= (1u << j);
 
-      /* Add button data */
-      /* potential TODO: this assumes num_buttons <= 16 */
-      DS_StrAppend(&data, DS_GetJoystickNumButtons(i));
-      DS_StrAppend(&data, (uint8_t)(button_flags >> 8));
-      DS_StrAppend(&data, (uint8_t)(button_flags));
+      /* Add button count */
+      DS_StrAppend(&data, (uint8_t)num_buttons);
+
+      /* Add button bitmask bytes in big-endian order (high bytes first) */
+      int button_bytes = get_button_bytes(num_buttons);
+      for (j = button_bytes - 1; j >= 0; --j)
+         DS_StrAppend(&data, (uint8_t)(button_flags >> (j * 8)));
 
       /* Add hat data */
       DS_StrAppend(&data, DS_GetJoystickNumHats(i));
