@@ -231,9 +231,8 @@ static int create_server(const char *port, const int family, const int socktype,
 static void *close_socket(void *data)
 {
    assert(data);
-   int sfd = *(int *)data;
-   free(data);
-   socket_close(sfd);
+   int *sfd = (int *)data;
+   socket_close(*sfd);
    return NULL;
 }
 
@@ -494,27 +493,13 @@ int socket_close(const int sfd)
  */
 void socket_close_threaded(int sfd)
 {
-   /* Heap-allocate the FD so the thread gets a valid pointer after this returns */
-   int *sfd_ptr = (int *)malloc(sizeof(int));
-   if (!sfd_ptr)
-   {
-      shutdown(sfd, SOCKY_READ | SOCKY_WRITE);
-      return;
-   }
-   *sfd_ptr = sfd;
-
+   /* Try to close the socket on different thread */
    pthread_t thread;
-   int error = pthread_create(&thread, NULL, &close_socket, (void *)sfd_ptr);
+   int error = pthread_create(&thread, NULL, &close_socket, (void *)&sfd);
 
+   /* Close socket normally if there is an error */
    if (error)
-   {
-      free(sfd_ptr);
       shutdown(sfd, SOCKY_READ | SOCKY_WRITE);
-   }
-   else
-   {
-      pthread_detach(thread);
-   }
 }
 
 /**

@@ -256,14 +256,10 @@ void DS_SocketClose(DS_Socket *ptr)
    ptr->info.server_init = 0;
    ptr->info.client_init = 0;
 
-   /* Close sockets */
-#if defined(__ANDROID__)
-   socket_close_threaded(ptr->info.sock_in);
-   socket_close_threaded(ptr->info.sock_out);
-#else
+   /* Close sockets — socket operations already run in background threads
+    * (DS_SocketOpen uses pthread_create), so a direct close is safe everywhere */
    socket_close(ptr->info.sock_in);
    socket_close(ptr->info.sock_out);
-#endif
 
    /* Reset socket information structure */
    ptr->info.sock_in = -1;
