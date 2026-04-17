@@ -47,6 +47,7 @@ typedef struct
    char buffer[4096]; /**< Holds the received data buffer */
    char in_service[12]; /**< Holds the input port number as a string */
    char out_service[12]; /**< Holds the output port number as a string */
+   pthread_t socket_thread; /**< Thread running the socket loop */
 } DS_SocketInfo;
 
 /**

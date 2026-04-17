@@ -179,6 +179,7 @@ DS_Socket *DS_SocketEmpty(void)
    socket->info.buffer_size = 0;
    socket->info.server_init = 0;
    socket->info.client_init = 0;
+   socket->info.socket_thread = 0;
 
    /* Fill strings with 0 */
    memset(socket->address, 0, sizeof(socket->address));
@@ -221,22 +222,23 @@ void DS_SocketOpen(DS_Socket *ptr)
    if (ptr->disabled)
       return;
 
-   /* Initialize the socket in another thread */
-   pthread_t thread;
-   int error = pthread_create(&thread, NULL, &create_socket, (void *)ptr);
-
-   /* Warn the user when the socket cannot start */
-   if (error)
+   /* Join previous socket thread before spawning a new one to prevent
+    * thread accumulation when the watchdog repeatedly reconfigures sockets */
+   if (ptr->info.socket_thread != 0)
    {
-      DS_String caption = DS_StrNew("LibDS");
-      DS_String message = DS_StrNew("Cannot start socket thread!");
-      DS_ShowMessageBox(&caption, &message, DS_ICON_ERROR);
-      DS_StrRmBuf(&caption);
-      DS_StrRmBuf(&message);
+      pthread_join(ptr->info.socket_thread, NULL);
+      ptr->info.socket_thread = 0;
    }
 
-   /* Quit if socket cannot start */
-   assert(!error);
+   /* Initialize the socket in another thread */
+   int error = pthread_create(&ptr->info.socket_thread, NULL, &create_socket, (void *)ptr);
+
+   /* Log and skip (do not crash) if thread creation fails */
+   if (error)
+   {
+      ptr->info.socket_thread = 0;
+      fprintf(stderr, "[LibDS] Warning: cannot start socket thread (%d)\n", error);
+   }
 }
 
 /**
