@@ -92,22 +92,29 @@ static void server_loop(DS_Socket *ptr)
 #endif
 
    /* Run the server while the socket is valid */
-   while (ptr->info.server_init && ptr->info.sock_in > 0)
+   while (ptr->info.server_init)
    {
+      /* Snapshot fd to avoid a race with DS_SocketClose setting sock_in = -1
+       * between the loop condition check and FD_SET/FD_ISSET (Android's bionic
+       * aborts rather than silently handling a negative fd). */
+      int sock = ptr->info.sock_in;
+      if (sock <= 0)
+         break;
+
       tv.tv_sec = 0;
       tv.tv_usec = 5000 * 100;
 
       FD_ZERO(&set);
-      FD_SET(ptr->info.sock_in, &set);
+      FD_SET(sock, &set);
 
 #if defined _WIN32
       fd = 0;
 #else
-      fd = ptr->info.sock_in + 1;
+      fd = sock + 1;
 #endif
 
       rc = select(fd, &set, NULL, NULL, &tv);
-      if (rc > 0 && FD_ISSET(ptr->info.sock_in, &set))
+      if (rc > 0 && FD_ISSET(sock, &set))
          read_socket(ptr);
    }
 }
