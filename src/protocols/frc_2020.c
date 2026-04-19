@@ -36,6 +36,8 @@
 
 #if defined _WIN32
 #   include <windows.h>
+#else
+#   include <sys/time.h>
 #endif
 
 /*
@@ -317,10 +319,10 @@ static uint8_t get_joystick_size(const int joystick)
  */
 static DS_String get_timezone_data(void)
 {
-   DS_String data = DS_StrNewLen(13);
+   DS_String data = DS_StrNewLen(14);
 
    /* Get current time */
-   time_t rt = 0;
+   time_t rt = time(NULL);
    uint32_t ms = 0;
    struct tm timeinfo;
 
@@ -348,26 +350,31 @@ static DS_String get_timezone_data(void)
    GetSystemTime(&info.StandardDate);
    ms = (uint32_t)info.StandardDate.wMilliseconds;
 #else
-   /* Timezone is stored directly in time_t structure */
+   struct timeval tv;
+   gettimeofday(&tv, NULL);
+   ms = (uint32_t)(tv.tv_usec / 1000);
+
+   /* Timezone is stored directly in tm structure */
    DS_String tz = DS_StrNew(timeinfo.tm_zone);
 #endif
 
-   /* Encode date/time in datagram */
-   DS_StrSetChar(&data, 0, (uint8_t)cTagDate);
-   DS_StrSetChar(&data, 1, (uint8_t)(ms >> 24));
-   DS_StrSetChar(&data, 2, (uint8_t)(ms >> 16));
-   DS_StrSetChar(&data, 3, (uint8_t)(ms >> 8));
-   DS_StrSetChar(&data, 4, (uint8_t)(ms));
-   DS_StrSetChar(&data, 5, (uint8_t)timeinfo.tm_sec);
-   DS_StrSetChar(&data, 6, (uint8_t)timeinfo.tm_min);
-   DS_StrSetChar(&data, 7, (uint8_t)timeinfo.tm_hour);
-   DS_StrSetChar(&data, 8, (uint8_t)timeinfo.tm_yday);
-   DS_StrSetChar(&data, 9, (uint8_t)timeinfo.tm_mon);
-   DS_StrSetChar(&data, 10, (uint8_t)timeinfo.tm_year);
+   /* Encode date/time in datagram — format: [section_len][tag][data...] */
+   DS_StrSetChar(&data, 0, (uint8_t)0x0b);
+   DS_StrSetChar(&data, 1, (uint8_t)cTagDate);
+   DS_StrSetChar(&data, 2, (uint8_t)(ms >> 24));
+   DS_StrSetChar(&data, 3, (uint8_t)(ms >> 16));
+   DS_StrSetChar(&data, 4, (uint8_t)(ms >> 8));
+   DS_StrSetChar(&data, 5, (uint8_t)(ms));
+   DS_StrSetChar(&data, 6, (uint8_t)timeinfo.tm_sec);
+   DS_StrSetChar(&data, 7, (uint8_t)timeinfo.tm_min);
+   DS_StrSetChar(&data, 8, (uint8_t)timeinfo.tm_hour);
+   DS_StrSetChar(&data, 9, (uint8_t)timeinfo.tm_yday);
+   DS_StrSetChar(&data, 10, (uint8_t)timeinfo.tm_mon);
+   DS_StrSetChar(&data, 11, (uint8_t)timeinfo.tm_year);
 
-   /* Add timezone length and tag */
-   DS_StrSetChar(&data, 11, cTagTimezone);
+   /* Add timezone section: [string_len][tag][string] */
    DS_StrSetChar(&data, 12, DS_StrLen(&tz));
+   DS_StrSetChar(&data, 13, cTagTimezone);
 
    /* Add timezone string */
    DS_StrJoin(&data, &tz);

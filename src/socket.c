@@ -373,6 +373,11 @@ void DS_SocketChangeAddress(DS_Socket *ptr, const char *address)
    if (!address)
       return;
 
+   /* Skip if address unchanged and socket is live — prevents watchdog-triggered
+    * socket churn (new ephemeral port → brief gap → watchdog fires again). */
+   if (strcmp(ptr->address, address) == 0 && ptr->info.server_init != 0)
+      return;
+
    /* Re-assign the address */
    memset(ptr->address, 0, sizeof(ptr->address));
    memcpy(ptr->address, address, strlen(address));

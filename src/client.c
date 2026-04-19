@@ -45,9 +45,9 @@ static DS_String custom_robot_address;
 void Client_Init(void)
 {
    status_string = DS_StrNew("Loading...");
-   custom_fms_address = DS_StrNew(DS_FallBackAddress);
-   custom_radio_address = DS_StrNew(DS_FallBackAddress);
-   custom_robot_address = DS_StrNew(DS_FallBackAddress);
+   custom_fms_address = DS_StrNewLen(0);
+   custom_radio_address = DS_StrNewLen(0);
+   custom_robot_address = DS_StrNewLen(0);
 
    DS_SetGameData("");
 }
@@ -377,6 +377,30 @@ float DS_GetMaximumBatteryVoltage(void)
       return DS_CurrentProtocol()->max_battery_voltage;
 
    return 0.0;
+}
+
+/**
+ * Returns \c 1 if the robot is in a brownout condition
+ */
+int DS_GetRobotBrownout(void)
+{
+   return CFG_GetRobotBrownout();
+}
+
+/**
+ * Returns the current match number from FMS
+ */
+int DS_GetMatchNumber(void)
+{
+   return CFG_GetMatchNumber();
+}
+
+/**
+ * Returns the remaining match time in seconds
+ */
+float DS_GetMatchTime(void)
+{
+   return CFG_GetMatchTime();
 }
 
 /**

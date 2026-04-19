@@ -50,6 +50,10 @@ static int robot_communications = -1;
 static DS_Position robot_position = DS_POSITION_1;
 static DS_Alliance robot_alliance = DS_ALLIANCE_RED;
 static DS_ControlMode control_mode = DS_CONTROL_TELEOPERATED;
+static int robot_brownout = -1;
+static int match_number = 0;
+static float match_time = 0;
+static int tournament_level = 0;
 
 /**
  * Ensures that the given \a input number is either \c 0 or \c 1
@@ -96,6 +100,9 @@ static void create_robot_event(const DS_EventType type)
    event.robot.disk_usage = CFG_GetRobotDiskUsage();
    event.robot.estopped = CFG_GetEmergencyStopped();
    event.robot.connected = CFG_GetRobotCommunications();
+   event.robot.brownout = CFG_GetRobotBrownout();
+   event.robot.match_number = CFG_GetMatchNumber();
+   event.robot.match_time = CFG_GetMatchTime();
 
    DS_AddEvent(&event);
 }
@@ -523,6 +530,59 @@ void CFG_SetRobotCommunications(const int communications)
    }
 }
 
+int CFG_GetRobotBrownout(void)
+{
+   return robot_brownout == 1;
+}
+
+int CFG_GetMatchNumber(void)
+{
+   return DS_Max(match_number, 0);
+}
+
+float CFG_GetMatchTime(void)
+{
+   return match_time > 0 ? match_time : 0;
+}
+
+int CFG_GetTournamentLevel(void)
+{
+   return tournament_level;
+}
+
+void CFG_SetRobotBrownout(const int brownout)
+{
+   if (robot_brownout != to_boolean(brownout))
+   {
+      robot_brownout = to_boolean(brownout);
+      create_robot_event(DS_ROBOT_BROWNOUT_CHANGED);
+      create_robot_event(DS_STATUS_STRING_CHANGED);
+   }
+}
+
+void CFG_SetMatchNumber(const int number)
+{
+   if (match_number != number)
+   {
+      match_number = number;
+      create_robot_event(DS_MATCH_NUMBER_CHANGED);
+   }
+}
+
+void CFG_SetMatchTime(const float time)
+{
+   if (match_time != time)
+   {
+      match_time = time;
+      create_robot_event(DS_MATCH_TIME_CHANGED);
+   }
+}
+
+void CFG_SetTournamentLevel(const int level)
+{
+   tournament_level = level;
+}
+
 /**
  * Called when the FMS watchdog expires
  */
@@ -555,6 +615,7 @@ void CFG_RobotWatchdogExpired(void)
    CFG_SetRobotDiskUsage(0);
    CFG_SetEmergencyStopped(0);
    CFG_SetRobotCommunications(0);
+   CFG_SetRobotBrownout(0);
 
    /* Force the sockets to perform another lookup */
    CFG_ReconfigureAddresses(RECONFIGURE_ROBOT);

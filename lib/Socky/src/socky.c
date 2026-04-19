@@ -428,7 +428,6 @@ int create_client_tcp(const char *host, const char *port, const int family, cons
 
    /* Yay! */
    freeaddrinfo(addr);
-   freeaddrinfo(info);
    return sfd;
 }
 
