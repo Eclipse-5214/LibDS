@@ -617,9 +617,6 @@ void CFG_RobotWatchdogExpired(void)
    CFG_SetRobotCommunications(0);
    CFG_SetRobotBrownout(0);
 
-   /* Force the sockets to perform another lookup */
-   CFG_ReconfigureAddresses(RECONFIGURE_ROBOT);
-
    /* Update the status label */
    create_robot_event(DS_STATUS_STRING_CHANGED);
 }

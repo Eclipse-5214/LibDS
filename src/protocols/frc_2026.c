@@ -276,9 +276,9 @@ static uint8_t get_request_code(void)
          code |= cDSConnected;
 
       if (request_reboot)
-         code = cRequestReboot;
+         code |= cRequestReboot;
       else if (restart_code)
-         code = cRequestRestartCode;
+         code |= cRequestRestartCode;
    }
 
    return code;
@@ -710,7 +710,7 @@ static int read_robot_packet(const DS_String *data)
    if (!data)
       return 0;
 
-   if (DS_StrLen(data) < 7)
+   if (DS_StrLen(data) < 8)
       return 0;
 
    uint8_t control = (uint8_t)DS_StrCharAt(data, 3);

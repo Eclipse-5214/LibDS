@@ -446,7 +446,7 @@ void DS_ConfigureProtocol(const DS_Protocol *ptr)
    /* Update watchdogs */
    fms_recv_timer.time = DS_Min(protocol.fms_interval * 50, 1000);
    radio_recv_timer.time = DS_Min(protocol.radio_interval * 50, 1000);
-   robot_recv_timer.time = DS_Min(protocol.robot_interval * 50, 1000);
+   robot_recv_timer.time = DS_Min(protocol.robot_interval * 125, 2500);
 
    /* Start the timers */
    DS_TimerStart(&fms_send_timer);
