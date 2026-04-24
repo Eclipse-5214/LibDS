@@ -535,14 +535,6 @@ static DS_String create_robot_packet(void)
 {
    {
       DS_Protocol *proto = DS_CurrentProtocol();
-
-      /* If the user-set address diverges from the socket's current address,
-       * reconnect so IP changes take effect without waiting for a watchdog. */
-      char *applied = DS_GetAppliedRobotAddress();
-      if (applied && proto && strcmp(applied, proto->robot_socket.address) != 0)
-         DS_SocketChangeAddress(&proto->robot_socket, applied);
-      DS_FREE(applied);
-
       const char *cur = proto ? proto->robot_socket.address : "";
 
       int is_sim = (strcmp(cur, "127.0.0.1") == 0 || strcmp(cur, "localhost") == 0);
@@ -718,7 +710,7 @@ static int read_robot_packet(const DS_String *data)
    if (!data)
       return 0;
 
-   if (DS_StrLen(data) < 8)
+   if (DS_StrLen(data) < 7)
       return 0;
 
    uint8_t control = (uint8_t)DS_StrCharAt(data, 3);

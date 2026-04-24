@@ -283,6 +283,8 @@ static void update_watchdogs()
    if (robot_recv_timer.expired)
    {
       CFG_RobotWatchdogExpired();
+      if (enable_operations && protocol.reset_robot)
+         protocol.reset_robot();
       DS_TimerReset(&robot_recv_timer);
    }
 }
