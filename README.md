@@ -1,189 +1,85 @@
 # LibDS
 
-[![Build Status](https://travis-ci.org/FRC-Utilities/LibDS.svg?branch=master)](https://travis-ci.org/FRC-Utilities/LibDS)
+A C library that abstracts the network communication layer between a Driver Station application and an FRC robot. Vendored and extended for use in [NovaDS](../../README.md).
 
-The DriverStation library allows you to connect and manage a robot easily by providing an abstraction layer between an application and the network comununications between the robot and the host computer.
+Originally by [Alex Spataru](https://github.com/FRC-Utilities/LibDS).
 
-The library is written in C, allowing it to be used in many platforms and/or programming languages (using wrappers).
+## Protocols
 
-### Features
+| Protocol | Notes |
+|---|---|
+| FRC 2014 | Legacy CRIO protocol |
+| FRC 2015 | Base modern protocol |
+| FRC 2016 | 2015 + updated robot address resolution |
+| FRC 2020 | Current roboRIO protocol |
+| FRC 2026 | **Default in NovaDS** — extends 2020 with TCP channel |
 
-LibDS implements the following features:
+### FRC 2026 Extensions
 
-- Modular design
-- Dynamic protocol loading
-- Integrated event system
-- Joystick handling functions
-- Safety features
-- Abstract-protocol object
-- Cross-platform socket handling 
+Built on top of FRC 2020 with the following additions:
 
-You may find a lot of mistakes here, be it design choices or just stupid mistakes. If you spot something, I would be very grateful if you could tell me about it (or make a pull request).
+- **TCP channel (port 1740)** — joystick descriptors, match info, game data sent on connect; robot stdout and error messages received
+- **Brownout detection** — `DS_GetRobotBrownout()` tracks the brownout bit from robot status packets
+- **FMS port switching** — switches robot UDP out-port 1110 → 1115 when FMS connects
+- **Simulation auto-detect** — suppresses `cDSConnected` flag and TCP when target is `127.0.0.1`/`localhost`
 
-### Example Projects
+## Architecture
 
-![Image](examples/ConsoleDS/etc/screenshot.png)
+### Event loop
 
-I have created two example projects to demonstrate the uses of LibDS:
-
-- A command-line DS with SDL and ncurses/pdcurses
-- A graphical UI DS with Qt4/Qt5 and C++
-
-You can browse the code of the examples [here](examples/)!
-
-### Quick Introduction
-
-#### Initialization
-
-The LibDS has its own event loop, which runs on a separate thread. To start the DS engine, you must call `DS_Init()`, which initializes all the modules of the LibDS (config, events, joysticks, etc).
-
-You should initialize the DS before initalizing any of your application components that interact with the DS. Check this example:
+LibDS runs its own event loop on a background thread (`Protocols_Init`). Applications poll the event queue periodically:
 
 ```c
-#include <LibDS.h>
+DS_Init();
+DS_ConfigureProtocol(DS_GetProtocolFRC_2026());
 
-int main() {
-   /* Initialize the DS */
-   DS_Init();
-
-   /* Now proceed to initializing your application */
-   DeepMagic();
-   VoodooInit();
-   HeavyWizardry();
-   
-   /* Load the 2016 protocol, the protocol can be safely changed during runtime. 
-    *
-    * Also, the LibDS can operate safely without a loaded protocol, 
-    * so there is no rush to call this function. 
-    */
-   DS_ConfigureProtocol (DS_GetProtocolFRC_2016());
-}
-```
-
-#### Communication protocols
-
-After initializing the DS, you must load a protocol, which instructs the LibDS on the following processes:
-
-- How to create client packets:
-   - DS-to-robot packets
-   - DS-to-radio packets
-   - DS-to-FMS packets
-
-- How to read and interpret incoming packets
-
-- How to connect to the different network targets:
-   - Input and output ports
-   - IP protocol type (UDP or TCP)
-   - Which IP addresses to use
-
-- Last but not least, the sender timings, for example:
-   - Send DS-to-robot packets every 20 ms
-   - Send DS-to-FMS packets every 500 ms
-   - Do not send DS-to-radio packets
-
-The LibDS has built-in support for the following protocols:
-- FRC 2009-2014
-- FRC 2015
-- FRC 2016 (same as 2015, but with different robot address)
-- FRC 2020 (in development)
-
-To load a protocol, use the `DS_ConfigureProtocol()` function. As a final note, you can also implement your own protocols and instruct the LibDS to use it. 
-
-
-#### Interacting with the DS events
-
-The LibDS registers the different events in a FIFO (First In, First Out) queue, to access the events, use the `DS_PollEvent()` function in a while loop. Each event has a "type" code, which allows you to know what kind of event are you dealing with. 
-
-The easiest way to react to the DS events is the following (pseudo-code):
-
-```c
+// in your main loop:
 DS_Event event;
-while (DS_PollEvent (event)) {
-   switch (event.type) {
-      case DS_EVENT_X:
-         // react to x event
-      case DS_EVENT_Y:
-         // react to y event
-   }
+while (DS_PollEvent(&event)) {
+    switch (event.type) {
+    case DS_ROBOT_CONNECTED:
+        // ...
+    case DS_ROBOT_VOLTAGE_CHANGED:
+        printf("voltage: %f\n", event.robot.voltage);
+        break;
+    }
 }
 ```
 
-The code above must be called periodically. Here is a (functional) example:
+### Public API (`DS_Client.h`)
 
-```c
-#include <LibDS.h>
-#include <stdio.h>
+All functions a host application needs — getters for comms, code, voltage, CPU/RAM/disk usage, and setters for team number, alliance, control mode, enable state, custom addresses, etc.
 
-static void process_events();
+### Protocol state (`DS_Config.h`)
 
-int main() {
-   DS_Init();
-   DS_ConfigureProtocol (DS_GetProtocolFRC_2016());
-   
-   while (1) {
-      process_events();
-      DS_Sleep (10);
-   }
-   
-   return EXIT_SUCCESS;
-}
+Internal setters called by protocol implementations to update LibDS state. Each setter fires a corresponding event into the queue.
 
-void process_events() {
-   DS_Event event;
-   while (DS_PollEvent (&event)) {
-      switch (event.type) {
-      case DS_ROBOT_ENABLED:
-         printf ("Robot enabled\n");
-         break;
-      case DS_ROBOT_DISABLED:
-         printf ("Robot disabled\n");
-         break;
-      case DS_ROBOT_CONNECTED:
-         printf ("Connected to robot\n");
-         break;
-      case DS_ROBOT_DISCONNECTED:
-         printf ("Disconnected to robot\n");
-         break;
-      case DS_ROBOT_VOLTAGE_CHANGED:
-         printf ("Robot voltage set to: %f\n", event.robot.voltage);
-         break;
-      default:
-         break;
-      }
-   }
-}
-```
+### Sockets (`socket.c`)
 
-### Project Architecture
+Each socket (FMS, radio, robot, netconsole) is represented as a `DS_Socket` struct defining ports, protocol type (UDP/TCP), and remote address. The socket module manages a background `select()`-based receive thread per socket.
 
-#### 'Private' vs. 'Public' members
+### Watchdogs (`protocols.c`)
 
-- All the functions that a client application would be interested in are located in [`DS_Client.h`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Client.h). 
+Three independent watchdog timers (FMS, radio, robot). If no valid packet is received within the timeout window, the corresponding watchdog fires:
+- `CFG_FMSWatchdogExpired()` / `CFG_RadioWatchdogExpired()` / `CFG_RobotWatchdogExpired()`
 
-- Functions that are used by the protocols to update the state of the LibDS are made available in [`DS_Config.h`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Config.h). Calling any of the 'setter' functions in [`DS_Config`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Config.h) will trigger an event (which can later be used by the client application).
+`CFG_RobotWatchdogExpired` also calls `protocol.reset_robot()` to tear down protocol-level state (e.g. the TCP connection in FRC 2026) so it can reconnect cleanly.
 
-#### Protocols
+### Packet format — Robot → DS (FRC 2020/2026)
 
-Protocols are encapsulated structures. When a protocol is initialized, it defines its properties and its respective data functions. The different functions of the LibDS will then operate with the data and properties defined by the current protocol.
+| Byte | Field |
+|---|---|
+| 0–1 | Sequence number (big-endian) |
+| 2 | Comm version (`0x01`) |
+| 3 | Control byte (mirrored from DS) |
+| 4 | Status (`0x20` = has code, `0x10` = brownout) |
+| 5 | Voltage integer |
+| 6 | Voltage decimal |
+| 7 | Request (`0x01` = wants time sync) |
+| 8+ | Extended tags (CPU, RAM, disk, CAN) |
 
-As with the original LibDS, protocols have access to the `DS_Config` to update the state of the LibDS.
+Minimum valid packet: **7 bytes**. Byte 7 is safely defaulted to `0` when absent.
 
-The base protocol is implemented in the [`DS_Protocol`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Protocol.h#L33) structure.
+## Usage in NovaDS
 
-##### Sockets
-
-Instead of manually initializing a socket for each target, data direction and protocol type (UDP and TCP). The LibDS will use the [`DS_Socket`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Socket.h#L56) object to define ports, protocol type and remote targets. 
-
-All the logic code is in [`socket.c`](https://github.com/FRC-Utilities/LibDS-C/blob/master/src/socket.c), which will be in charge of managing the system sockets with the information given by a [`DS_Socket`](https://github.com/FRC-Utilities/LibDS-C/blob/master/include/DS_Socket.h#L56) object.
-
-### Compilation instructions
-
-To compile the project, navigate to the project root and run the following commands
-
-* qmake
-* make
-
-If your project runs into runtime errors try running `make staticlib` instead of `make`
-
-To install compiled library files, and headers to the correct locations in /usr/local, use this command
-* sudo make install
+LibDS is compiled directly into the Tauri backend via the `cc` crate in `build.rs`. Rust bindings are generated at build time by `bindgen` from `include/LibDS.h`. No separate build step is needed.
